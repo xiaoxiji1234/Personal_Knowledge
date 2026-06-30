@@ -28,7 +28,7 @@ const {
     <el-card shadow="never" class="query-card">
       <template #header>
         <div class="card-header">
-          <span><el-icon><ChatLineRound /></el-icon>提问</span>
+          <span><el-icon><ChatLineRound /></el-icon>知识库提问</span>
         </div>
       </template>
 
@@ -72,7 +72,7 @@ const {
       <el-alert v-if="queryError" class="stack-alert" type="error" :closable="false" show-icon :title="queryError" />
     </el-card>
 
-    <section class="results">
+    <section class="results admin-section">
       <el-card v-if="answer" shadow="never" class="answer-card">
         <template #header>
           <div class="card-header">

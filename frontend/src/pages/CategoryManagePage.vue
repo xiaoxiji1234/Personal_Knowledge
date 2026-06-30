@@ -104,11 +104,17 @@ const categoryTableRows = computed<CategoryTableRow[]>(() => {
 <template>
   <section class="manage-layout">
     <div class="table-toolbar top-search inline-tools">
-      <div class="manage-toolbar-filters">
-        <el-input v-model="categorySearch" clearable placeholder="查询分类" />
+      <div class="toolbar-title">
+        <strong>分类维护</strong>
+        <span>统一维护知识库分类与文档归属</span>
       </div>
-      <div class="inline-actions">
-        <el-button type="primary" :icon="FolderAdd" @click="handleStartCreateCategory">新增分类</el-button>
+      <div class="toolbar-controls">
+        <div class="manage-toolbar-filters">
+          <el-input v-model="categorySearch" clearable placeholder="查询分类" />
+        </div>
+        <div class="inline-actions">
+          <el-button type="primary" :icon="FolderAdd" @click="handleStartCreateCategory">新增分类</el-button>
+        </div>
       </div>
     </div>
 

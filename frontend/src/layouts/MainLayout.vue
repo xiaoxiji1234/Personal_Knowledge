@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ChatLineRound, Expand, Files, Fold, FolderAdd } from '@element-plus/icons-vue'
+import {
+  ArrowDown,
+  ChatLineRound,
+  Expand,
+  Files,
+  Fold,
+  FolderAdd,
+  HomeFilled,
+  SwitchButton,
+  UserFilled,
+} from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useAuth } from '../composables/useAuth'
 
@@ -10,9 +20,15 @@ const router = useRouter()
 const isSidebarCollapsed = ref(false)
 const { currentUserName, logout } = useAuth()
 
-const sidebarWidth = computed(() => (isSidebarCollapsed.value ? '76px' : '232px'))
+const sidebarWidth = computed(() => (isSidebarCollapsed.value ? '64px' : '220px'))
 const pageTitle = computed(() => String(route.meta.title ?? '个人知识库'))
 const activeMenu = computed(() => String(route.name ?? 'qa'))
+
+const menuItems = [
+  { key: 'qa', label: '知识库问答', icon: ChatLineRound },
+  { key: 'manage', label: '知识库管理', icon: Files },
+  { key: 'category-manage', label: '分类管理', icon: FolderAdd },
+]
 
 /**
  * Toggle the left navigation width for a more focused workspace.
@@ -40,44 +56,73 @@ async function handleLogout() {
 
 <template>
   <el-container class="app-shell">
-    <el-aside class="sidebar" :width="sidebarWidth" :class="{ collapsed: isSidebarCollapsed }">
-      <div class="brand" :class="{ collapsed: isSidebarCollapsed }">
-        <h1>小库-知识库</h1>
-        <el-button
-          class="collapse-button"
-          circle
-          text
-          :icon="isSidebarCollapsed ? Expand : Fold"
-          @click="toggleSidebar"
-        />
+    <el-aside class="admin-sidebar" :width="sidebarWidth" :class="{ collapsed: isSidebarCollapsed }">
+      <div class="admin-brand" :class="{ collapsed: isSidebarCollapsed }">
+        <div class="brand-mark">K</div>
+        <div class="brand-copy">
+          <strong>小库知识库</strong>
+          <span>Knowledge Admin</span>
+        </div>
       </div>
-      <el-menu :default-active="activeMenu" :collapse="isSidebarCollapsed" class="side-menu" @select="handleSelect">
-        <el-menu-item index="qa">
-          <el-icon><ChatLineRound /></el-icon>
-          <span>问答</span>
-        </el-menu-item>
-        <el-menu-item index="manage">
-          <el-icon><Files /></el-icon>
-          <span>知识库管理</span>
-        </el-menu-item>
-        <el-menu-item index="category-manage">
-          <el-icon><FolderAdd /></el-icon>
-          <span>分类管理</span>
+
+      <el-menu
+        :default-active="activeMenu"
+        :collapse="isSidebarCollapsed"
+        background-color="#001529"
+        text-color="#a6adb9"
+        active-text-color="#ffffff"
+        class="admin-menu"
+        @select="handleSelect"
+      >
+        <el-menu-item v-for="item in menuItems" :key="item.key" :index="item.key">
+          <el-icon><component :is="item.icon" /></el-icon>
+          <template #title>{{ item.label }}</template>
         </el-menu-item>
       </el-menu>
     </el-aside>
 
-    <el-main class="main-panel">
-      <header class="page-header">
-        <div>
-          <h2 class="page-title">{{ pageTitle }}</h2>
+    <el-container class="admin-body">
+      <el-header class="admin-topbar" height="52px">
+        <div class="topbar-left">
+          <el-button
+            class="sidebar-toggle"
+            text
+            :icon="isSidebarCollapsed ? Expand : Fold"
+            @click="toggleSidebar"
+          />
+          <el-breadcrumb separator="/">
+            <el-breadcrumb-item>
+              <el-icon><HomeFilled /></el-icon>
+            </el-breadcrumb-item>
+            <el-breadcrumb-item>{{ pageTitle }}</el-breadcrumb-item>
+          </el-breadcrumb>
         </div>
-        <div class="page-actions">
-          <el-tag effect="light" round>{{ currentUserName }}</el-tag>
-          <el-button text @click="handleLogout">退出登录</el-button>
+
+        <div class="topbar-right">
+          <el-dropdown trigger="click" @command="handleLogout">
+            <button class="user-menu" type="button">
+              <el-icon><UserFilled /></el-icon>
+              <span>{{ currentUserName }}</span>
+              <el-icon><ArrowDown /></el-icon>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="logout" :icon="SwitchButton">退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
-      </header>
-      <router-view />
-    </el-main>
+      </el-header>
+
+      <el-main class="admin-main">
+        <header class="page-header">
+          <div>
+            <p class="page-kicker">Workspace</p>
+            <h2 class="page-title">{{ pageTitle }}</h2>
+          </div>
+        </header>
+        <router-view />
+      </el-main>
+    </el-container>
   </el-container>
 </template>

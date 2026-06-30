@@ -55,20 +55,26 @@ function handleUploadChange(file: UploadFile) {
 <template>
   <section class="manage-layout">
     <div class="table-toolbar top-search inline-tools">
-      <div class="manage-toolbar-filters">
-        <el-input
-          v-model="documentSearch"
-          clearable
-          :prefix-icon="Search"
-          placeholder="按文件名查询"
-          style="width: 200px;"
-        />
-        <el-select v-model="selectedManageCategory" clearable placeholder="选择分类" class="category-select">
-          <el-option v-for="category in categories" :key="category" :label="category" :value="category" />
-        </el-select>
+      <div class="toolbar-title">
+        <strong>文档检索</strong>
+        <span>{{ pageDescription }}</span>
       </div>
-      <div class="inline-actions">
-        <el-button type="primary" :icon="DocumentAdd" @click="openUploadDialog">添加知识库</el-button>
+      <div class="toolbar-controls">
+        <div class="manage-toolbar-filters">
+          <el-input
+            v-model="documentSearch"
+            clearable
+            :prefix-icon="Search"
+            placeholder="按文件名查询"
+            style="width: 200px;"
+          />
+          <el-select v-model="selectedManageCategory" clearable placeholder="选择分类" class="category-select">
+            <el-option v-for="category in categories" :key="category" :label="category" :value="category" />
+          </el-select>
+        </div>
+        <div class="inline-actions">
+          <el-button type="primary" :icon="DocumentAdd" @click="openUploadDialog">添加知识库</el-button>
+        </div>
       </div>
     </div>
     <section class="manage-grid">
