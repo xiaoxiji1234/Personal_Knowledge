@@ -52,7 +52,7 @@ async function submitLogin() {
         <p class="auth-kicker">Knowledge Workspace</p>
         <h1>登录你的知识库工作台</h1>
         <p>
-          继续管理文档、分类与问答记录。登录后我们会保留你的本地会话，方便你直接回到上一次的工作流。
+          继续管理文档、文件夹与问答记录。登录后我们会保留你的本地会话，方便你直接回到上一次的工作流。
         </p>
       </div>
 

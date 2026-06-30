@@ -72,7 +72,7 @@ async function submitRegister() {
         <p class="auth-kicker">Create Account</p>
         <h1>新建你的知识库账号</h1>
         <p>
-          注册后就可以进入知识库工作台，继续上传资料、整理分类，并把问答记录沉淀成自己的知识资产。
+          注册后就可以进入知识库工作台，继续上传资料、整理文件夹，并把问答记录沉淀成自己的知识资产。
         </p>
       </div>
 

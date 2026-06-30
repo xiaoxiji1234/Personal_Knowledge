@@ -67,6 +67,7 @@ class DocumentSummary:
     source: str
     chunks: int
     category: str = "默认"
+    folder_path: str = "默认"
     parser: str | None = None
     quality: str | None = None
     pages: int | None = None

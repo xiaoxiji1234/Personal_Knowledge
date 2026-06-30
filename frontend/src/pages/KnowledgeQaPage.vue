@@ -6,14 +6,14 @@ const {
   answer,
   askQuestion,
   canAsk,
-  categoryOptions,
   confidencePercent,
   confidenceTone,
+  folderOptions,
   isAnswerStreaming,
   isQuerying,
   latencyLabel,
   latencyTone,
-  queryCategory,
+  queryFolderPath,
   queryError,
   queryModeLabel,
   question,
@@ -33,8 +33,8 @@ const {
       </template>
 
       <div class="query-toolbar">
-        <el-select v-model="queryCategory" clearable placeholder="全部分类" class="category-select">
-          <el-option v-for="category in categoryOptions" :key="category" :label="category" :value="category" />
+        <el-select v-model="queryFolderPath" clearable placeholder="全部文件夹" class="folder-select">
+          <el-option v-for="folderPath in folderOptions" :key="folderPath" :label="folderPath" :value="folderPath" />
         </el-select>
         <el-switch v-model="useOnlineFallback" active-text="低置信度时联网查证" />
       </div>

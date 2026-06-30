@@ -16,7 +16,7 @@ from .llm import ExtractiveLlmProvider, HttpJsonLlmProvider, LlmProvider, OpenAI
 from .models import Citation, DocumentChunk, DocumentSummary, QueryPreparation, QueryResponse, RetrievalResult, SearchResult
 from .pdf_loader import load_document_text
 from .search import HttpJsonSearchProvider, NullSearchProvider, SearchProvider
-from .store import DEFAULT_CATEGORY, JsonVectorStore
+from .store import DEFAULT_CATEGORY, MAX_FOLDER_DEPTH, JsonVectorStore
 
 
 FRESHNESS_RE = re.compile(r"最新|最近|今天|昨日|昨天|本周|今年|近[一二三四五六七八九十0-9]+天|202[0-9]")
@@ -63,7 +63,13 @@ class KnowledgeAgent:
         else:
             self.llm_provider = ExtractiveLlmProvider()
 
-    def upload_path(self, source_path: Path, display_name: str | None = None, category: str = "默认") -> dict[str, object]:
+    def upload_path(
+        self,
+        source_path: Path,
+        display_name: str | None = None,
+        category: str = "默认",
+        folder_path: str | None = None,
+    ) -> dict[str, object]:
         """Copy a local document into the upload directory and index its chunks."""
         self.settings.upload_dir.mkdir(parents=True, exist_ok=True)
         doc_id = self._document_id(source_path)
@@ -72,19 +78,34 @@ class KnowledgeAgent:
             shutil.copyfile(source_path, saved_path)
         text, meta = load_document_text(saved_path)
         source_name = self._safe_display_name(display_name) or source_path.name
-        meta["category"] = self._safe_category(category)
+        normalized_folder = self._safe_folder_path(folder_path or category)
+        meta["category"] = normalized_folder
+        meta["folderPath"] = normalized_folder
         chunks = self._make_chunks(doc_id=doc_id, source=source_name, text=text, meta=meta)
         added = self.store.add_chunks(chunks)
-        return {"documentId": doc_id, "source": source_name, "category": meta["category"], "chunks": added, "meta": meta}
+        return {
+            "documentId": doc_id,
+            "source": source_name,
+            "category": normalized_folder,
+            "folderPath": normalized_folder,
+            "chunks": added,
+            "meta": meta,
+        }
 
-    def upload_bytes(self, filename: str, content: bytes, category: str = "默认") -> dict[str, object]:
+    def upload_bytes(
+        self,
+        filename: str,
+        content: bytes,
+        category: str = "默认",
+        folder_path: str | None = None,
+    ) -> dict[str, object]:
         """Persist uploaded file bytes and pass the saved file into the indexing pipeline."""
         self.settings.upload_dir.mkdir(parents=True, exist_ok=True)
         suffix = Path(filename).suffix or ".txt"
         doc_id = hashlib.sha256(content).hexdigest()[:16]
         saved_path = self.settings.upload_dir / f"{doc_id}{suffix.lower()}"
         saved_path.write_bytes(content)
-        return self.upload_path(saved_path, display_name=filename, category=category)
+        return self.upload_path(saved_path, display_name=filename, category=category, folder_path=folder_path)
 
     def query(
         self,
@@ -92,10 +113,17 @@ class KnowledgeAgent:
         use_online_fallback: bool = True,
         user_id: str | None = None,
         category: str | None = None,
+        folder_path: str | None = None,
     ) -> QueryResponse:
         """Answer a user query with local retrieval first and optional online fallback."""
         started = time.perf_counter()
-        prepared = self._prepare_query(query, use_online_fallback=use_online_fallback, user_id=user_id, category=category)
+        prepared = self._prepare_query(
+            query,
+            use_online_fallback=use_online_fallback,
+            user_id=user_id,
+            category=category,
+            folder_path=folder_path,
+        )
         text = self._compose_answer(
             query,
             prepared.local_results,
@@ -111,10 +139,17 @@ class KnowledgeAgent:
         use_online_fallback: bool = True,
         user_id: str | None = None,
         category: str | None = None,
+        folder_path: str | None = None,
     ) -> Iterator[dict[str, object]]:
         """Stream one answer as metadata, incremental text deltas, then final timing data."""
         started = time.perf_counter()
-        prepared = self._prepare_query(query, use_online_fallback=use_online_fallback, user_id=user_id, category=category)
+        prepared = self._prepare_query(
+            query,
+            use_online_fallback=use_online_fallback,
+            user_id=user_id,
+            category=category,
+            folder_path=folder_path,
+        )
         yield {
             "event": "meta",
             "data": {
@@ -145,9 +180,11 @@ class KnowledgeAgent:
         use_online_fallback: bool = True,
         user_id: str | None = None,
         category: str | None = None,
+        folder_path: str | None = None,
     ) -> QueryPreparation:
         """Collect local hits and optional web hits before answer generation starts."""
-        category_filter = self._safe_category(category) if category else None
+        active_folder = folder_path or category
+        category_filter = self._safe_folder_path(active_folder) if active_folder else None
         local_results = self.store.search(query, top_k=self.settings.top_k, category=category_filter)
         confidence = self._confidence(local_results)
         freshness_required = bool(FRESHNESS_RE.search(query))
@@ -196,39 +233,73 @@ class KnowledgeAgent:
 
     def list_categories(self) -> list[str]:
         """Return all knowledge-base categories, keeping the default category visible."""
-        categories = self.store.list_categories()
-        return categories or [DEFAULT_CATEGORY]
+        return self.list_folders()
+
+    def list_folders(self) -> list[str]:
+        """Return all folder paths, keeping the default folder visible."""
+        folders = self.store.list_folders()
+        return folders or [DEFAULT_CATEGORY]
 
     def add_category(self, category: str | None) -> dict[str, object]:
         """Create a knowledge-base category after normalizing and validating its name."""
-        normalized = self._safe_category(category)
-        if self.store.category_exists(normalized):
-            raise ValueError("Category already exists")
-        created = self.store.add_category(normalized)
-        return {"name": normalized, "created": created}
+        return self.add_folder(category)
+
+    def add_folder(self, name: str | None, parent_path: str | None = None) -> dict[str, object]:
+        """Create a folder path after normalizing depth, parent, and duplicate constraints."""
+        normalized = self._safe_new_folder_path(name, parent_path=parent_path)
+        if self.store.folder_exists(normalized):
+            raise ValueError("Folder already exists")
+        parent = self._parent_folder_path(normalized)
+        if parent and not self.store.folder_exists(parent):
+            raise LookupError("Parent folder not found")
+        created = self.store.add_folder(normalized)
+        return {"name": normalized, "folderPath": normalized, "created": created}
 
     def rename_category(self, old_category: str | None, new_category: str | None) -> dict[str, object]:
         """Rename a category and move all existing document chunks to the new name."""
-        old_normalized = self._safe_category(old_category)
-        new_normalized = self._safe_category(new_category)
+        return self.rename_folder(old_category, new_category)
+
+    def rename_folder(self, old_path: str | None, new_name: str | None) -> dict[str, object]:
+        """Rename a folder path and update all nested document paths."""
+        old_normalized = self._safe_existing_folder_path(old_path)
         if old_normalized == DEFAULT_CATEGORY:
-            raise ValueError("Default category cannot be renamed")
-        if not self.store.category_exists(old_normalized):
-            raise LookupError("Category not found")
-        if new_normalized != old_normalized and self.store.category_exists(new_normalized):
-            raise ValueError("Category already exists")
-        updated = self.store.rename_category(old_normalized, new_normalized)
-        return {"name": new_normalized, "oldName": old_normalized, "updatedDocuments": updated}
+            raise ValueError("Default folder cannot be renamed")
+        if not self.store.folder_exists(old_normalized):
+            raise LookupError("Folder not found")
+        new_normalized = self._safe_renamed_folder_path(old_normalized, new_name)
+        if new_normalized != old_normalized and self.store.folder_exists(new_normalized):
+            raise ValueError("Folder already exists")
+        parent = self._parent_folder_path(new_normalized)
+        if parent and not self.store.folder_exists(parent):
+            raise LookupError("Parent folder not found")
+        updated = self.store.rename_folder(old_normalized, new_normalized)
+        return {
+            "name": new_normalized,
+            "folderPath": new_normalized,
+            "oldName": old_normalized,
+            "oldFolderPath": old_normalized,
+            "updatedDocuments": updated,
+        }
 
     def delete_category(self, category: str | None) -> dict[str, object]:
         """Delete a category while preserving its documents by moving them to the default category."""
-        normalized = self._safe_category(category)
+        return self.delete_folder(category)
+
+    def delete_folder(self, folder_path: str | None) -> dict[str, object]:
+        """Delete a folder while preserving its documents by moving them to the default folder."""
+        normalized = self._safe_existing_folder_path(folder_path)
         if normalized == DEFAULT_CATEGORY:
-            raise ValueError("Default category cannot be deleted")
-        if not self.store.category_exists(normalized):
-            raise LookupError("Category not found")
-        updated = self.store.delete_category(normalized, fallback_category=DEFAULT_CATEGORY)
-        return {"name": normalized, "fallbackCategory": DEFAULT_CATEGORY, "updatedDocuments": updated}
+            raise ValueError("Default folder cannot be deleted")
+        if not self.store.folder_exists(normalized):
+            raise LookupError("Folder not found")
+        updated = self.store.delete_folder(normalized, fallback_folder=DEFAULT_CATEGORY)
+        return {
+            "name": normalized,
+            "folderPath": normalized,
+            "fallbackCategory": DEFAULT_CATEGORY,
+            "fallbackFolderPath": DEFAULT_CATEGORY,
+            "updatedDocuments": updated,
+        }
 
     def delete_document(self, doc_id: str) -> dict[str, object]:
         """Delete one document from the vector index and remove its uploaded file when present."""
@@ -240,12 +311,18 @@ class KnowledgeAgent:
                 deleted_file = True
         return {"documentId": doc_id, "deletedChunks": deleted_chunks, "deletedFile": deleted_file}
 
-    def update_document(self, doc_id: str, source: str | None, category: str | None) -> dict[str, object]:
+    def update_document(
+        self,
+        doc_id: str,
+        source: str | None,
+        category: str | None,
+        folder_path: str | None = None,
+    ) -> dict[str, object]:
         """Update one indexed document's display name and category without re-uploading it."""
         safe_source = self._safe_display_name(source)
         if not safe_source:
             raise ValueError("Document name is required")
-        normalized_category = self._safe_category(category)
+        normalized_category = self._safe_folder_path(folder_path or category)
         updated_chunks = self.store.update_document(doc_id, safe_source, normalized_category)
         if updated_chunks == 0:
             raise LookupError("Document not found")
@@ -253,6 +330,7 @@ class KnowledgeAgent:
             "documentId": doc_id,
             "source": safe_source,
             "category": normalized_category,
+            "folderPath": normalized_category,
             "updatedChunks": updated_chunks,
         }
 
@@ -416,10 +494,52 @@ class KnowledgeAgent:
 
     def _safe_category(self, category: str | None) -> str:
         """Normalize a user-provided knowledge-base category name."""
-        if not category:
+        return self._safe_folder_path(category)
+
+    def _safe_folder_path(self, folder_path: str | None) -> str:
+        """Normalize a folder path and enforce the maximum supported depth."""
+        if not folder_path:
             return DEFAULT_CATEGORY
-        compact = re.sub(r"\s+", " ", category).strip()
-        return compact[:40] if compact else DEFAULT_CATEGORY
+        raw_parts = str(folder_path).split("/")
+        parts = [re.sub(r"\s+", " ", part).strip() for part in raw_parts]
+        if any(not part for part in parts):
+            raise ValueError("Folder path cannot contain empty levels")
+        if len(parts) > MAX_FOLDER_DEPTH:
+            raise ValueError("Folder depth cannot exceed 3 levels")
+        if DEFAULT_CATEGORY in parts and len(parts) > 1:
+            raise ValueError("Default folder cannot be nested")
+        trimmed_parts = [part[:40] for part in parts]
+        return "/".join(trimmed_parts) if trimmed_parts else DEFAULT_CATEGORY
+
+    def _safe_new_folder_path(self, name: str | None, parent_path: str | None = None) -> str:
+        """Build a valid new folder path from a parent path and folder name."""
+        clean_name = self._safe_folder_path(name)
+        if clean_name == DEFAULT_CATEGORY:
+            raise ValueError("Folder name is required")
+        parent = self._safe_folder_path(parent_path) if parent_path else ""
+        if parent == DEFAULT_CATEGORY:
+            parent = ""
+        return self._safe_folder_path(f"{parent}/{clean_name}" if parent else clean_name)
+
+    def _safe_existing_folder_path(self, folder_path: str | None) -> str:
+        """Normalize an existing folder path supplied by clients."""
+        return self._safe_folder_path(folder_path)
+
+    def _safe_renamed_folder_path(self, old_path: str, new_name: str | None) -> str:
+        """Build the target folder path when renaming a folder leaf."""
+        clean_name = self._safe_folder_path(new_name)
+        if clean_name == DEFAULT_CATEGORY:
+            raise ValueError("Folder name is required")
+        if "/" in clean_name:
+            return clean_name
+        parent = self._parent_folder_path(old_path)
+        return self._safe_folder_path(f"{parent}/{clean_name}" if parent else clean_name)
+
+    def _parent_folder_path(self, folder_path: str) -> str | None:
+        """Return the parent path for one folder, or None for root folders."""
+        if "/" not in folder_path:
+            return None
+        return folder_path.rsplit("/", 1)[0]
 
 
 def query_response_to_dict(response: QueryResponse) -> dict[str, object]:
@@ -435,6 +555,7 @@ def document_summary_to_dict(summary: DocumentSummary) -> dict[str, object]:
     """Convert document summary dataclass fields to the public API naming style."""
     payload = asdict(summary)
     payload["documentId"] = payload.pop("doc_id")
+    payload["folderPath"] = payload.pop("folder_path")
     return payload
 
 

@@ -139,7 +139,88 @@ class KnowledgeAgentTest(unittest.TestCase):
             self.assertEqual(result["updatedChunks"], 1)
             self.assertEqual(documents[0].source, "新文件名.txt")
             self.assertEqual(documents[0].category, "产品资料")
+            self.assertEqual(documents[0].folder_path, "产品资料")
             self.assertIn("产品资料", agent.list_categories())
+
+    def test_create_folders_allows_three_levels_only(self) -> None:
+        """Folder creation should support up to 3 path levels and reject deeper paths."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agent = self.make_agent(Path(tmpdir))
+
+            first = agent.add_folder("产品")
+            second = agent.add_folder("需求", parent_path="产品")
+            third = agent.add_folder("2026", parent_path="产品/需求")
+
+            self.assertTrue(first["created"])
+            self.assertEqual(second["folderPath"], "产品/需求")
+            self.assertEqual(third["folderPath"], "产品/需求/2026")
+            self.assertEqual(agent.list_folders(), ["默认", "产品", "产品/需求", "产品/需求/2026"])
+            with self.assertRaises(ValueError):
+                agent.add_folder("Q1", parent_path="产品/需求/2026")
+
+    def test_rename_parent_folder_updates_children_and_documents(self) -> None:
+        """Renaming a parent folder should update child folders and document folder paths."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agent = self.make_agent(Path(tmpdir))
+            agent.add_folder("产品")
+            agent.add_folder("需求", parent_path="产品")
+            agent.add_folder("2026", parent_path="产品/需求")
+            agent.upload_bytes("prd.txt", "产品需求文档包含用户故事。".encode("utf-8"), folder_path="产品/需求/2026")
+
+            result = agent.rename_folder("产品/需求", "PRD")
+            response = agent.query("用户故事", use_online_fallback=False, folder_path="产品/PRD/2026")
+
+            self.assertEqual(result["folderPath"], "产品/PRD")
+            self.assertIn("产品/PRD", agent.list_folders())
+            self.assertIn("产品/PRD/2026", agent.list_folders())
+            self.assertNotIn("产品/需求/2026", agent.list_folders())
+            self.assertEqual(agent.list_documents()[0].folder_path, "产品/PRD/2026")
+            self.assertTrue(response.local_results)
+
+    def test_delete_folder_moves_nested_documents_to_default(self) -> None:
+        """Deleting a folder should preserve nested documents by moving them to the default folder."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agent = self.make_agent(Path(tmpdir))
+            agent.add_folder("产品")
+            agent.add_folder("需求", parent_path="产品")
+            agent.upload_bytes("prd.txt", "产品需求文档包含用户故事。".encode("utf-8"), folder_path="产品/需求")
+
+            result = agent.delete_folder("产品")
+
+            self.assertEqual(result["fallbackFolderPath"], "默认")
+            self.assertEqual(result["updatedDocuments"], 1)
+            self.assertEqual(agent.list_folders(), ["默认"])
+            self.assertEqual(agent.list_documents()[0].folder_path, "默认")
+
+    def test_folder_path_filters_query_results(self) -> None:
+        """Query folderPath should restrict local retrieval to matching documents."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agent = self.make_agent(Path(tmpdir))
+            agent.add_folder("前端")
+            agent.add_folder("后端")
+            agent.upload_bytes("frontend.txt", "Vue 页面使用 Element Plus 组件库。".encode("utf-8"), folder_path="前端")
+            agent.upload_bytes("backend.txt", "FastAPI 后端提供文档上传接口。".encode("utf-8"), folder_path="后端")
+
+            frontend_response = agent.query("组件库", use_online_fallback=False, folder_path="前端")
+            backend_response = agent.query("组件库", use_online_fallback=False, folder_path="后端")
+
+            self.assertTrue(frontend_response.local_results)
+            self.assertEqual(frontend_response.local_results[0].source, "frontend.txt")
+            self.assertFalse(backend_response.local_results)
+
+    def test_legacy_category_arguments_still_work_as_folder_paths(self) -> None:
+        """Legacy category arguments should still upload, edit, and query folder-compatible paths."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agent = self.make_agent(Path(tmpdir))
+            payload = agent.upload_bytes("legacy.txt", "旧分类参数仍然可以过滤。".encode("utf-8"), category="旧分类")
+
+            edit_result = agent.update_document(str(payload["documentId"]), "legacy-renamed.txt", "旧分类/归档")
+            response = agent.query("过滤", use_online_fallback=False, category="旧分类/归档")
+
+            self.assertEqual(payload["folderPath"], "旧分类")
+            self.assertEqual(edit_result["folderPath"], "旧分类/归档")
+            self.assertTrue(response.local_results)
+            self.assertEqual(response.local_results[0].source, "legacy-renamed.txt")
 
     def test_category_filters_query_results(self) -> None:
         """Query category should restrict local retrieval to matching documents."""

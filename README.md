@@ -1,12 +1,12 @@
 # 个人知识库问答 + 联网查证 Agent
 
-一个本地优先的个人知识库问答系统，支持上传文档、自动切片、向量检索、分类管理和联网查证。项目由 Python FastAPI 后端和 Vue3 前端组成，适合个人知识库、资料整理、团队知识查询和轻量 RAG 场景。
+一个本地优先的个人知识库问答系统，支持上传文档、自动切片、向量检索、三级文件夹管理和联网查证。项目由 Python FastAPI 后端和 Vue3 前端组成，适合个人知识库、资料整理、团队知识查询和轻量 RAG 场景。
 
 ## 亮点
 
 - 本地优先：先查自己的知识库，必要时再联网补证据。
 - 文档友好：支持 PDF、Word、Excel、CSV、Markdown、纯文本等常见格式。
-- 可管理：支持文档列表、分类管理、重命名、删除。
+- 可管理：支持文档列表、最多 3 级文件夹、重命名、删除。
 - 可扩展：可替换联网搜索 provider 和 LLM provider。
 - 可测试：核心链路可在无外部 API 的环境下跑单元测试。
 
@@ -14,7 +14,7 @@
 
 - 上传并解析文档，写入本地索引。
 - 自动进行文本分块和向量化。
-- 维护文档列表和分类列表。
+- 维护文档列表和文件夹树。
 - 问答时展示答案、引用来源、置信度和联网状态。
 - 支持流式问答接口，方便前端边生成边显示。
 - 支持本地账号登录、注册、退出。
@@ -60,7 +60,7 @@ npm run dev
 ### 3. 开始使用
 
 1. 打开前端页面并登录或注册本地账号。
-2. 在“知识库管理”里上传文档并选择分类。
+2. 在“知识库管理”里上传文档并选择文件夹。
 3. 在“问答”页面输入问题。
 4. 查看答案、引用来源、置信度和是否走了联网查证。
 
@@ -173,11 +173,12 @@ Docker Compose 会把运行数据写入命名卷 `knowledge-data`，对应目录
 - `POST /upload`：上传文件并入库
 - `GET /documents`：查看已入库文档
 - `DELETE /documents/{document_id}`：删除文档
-- `PUT /documents/{document_id}`：修改文档名称和分类
-- `GET /categories`：获取分类列表
-- `POST /categories`：新增分类
-- `PUT /categories/{category_name}`：重命名分类
-- `DELETE /categories/{category_name}`：删除分类
+- `PUT /documents/{document_id}`：修改文档名称和文件夹
+- `GET /folders`：获取文件夹路径列表
+- `POST /folders`：新增文件夹，支持 `name` 和可选 `parentPath`
+- `PUT /folders/{folder_path}`：重命名文件夹，并同步子文件夹和文档路径
+- `DELETE /folders/{folder_path}`：删除文件夹，文件夹内文档会移动到 `默认`
+- `GET /categories` / `POST /categories` / `PUT /categories/{category_name}` / `DELETE /categories/{category_name}`：旧分类接口兼容别名
 
 ### 问答
 

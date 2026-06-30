@@ -56,12 +56,20 @@ class QueryRequest(BaseModel):
     useOnlineFallback: bool = True
     userId: Optional[str] = None
     category: Optional[str] = None
+    folderPath: Optional[str] = None
 
 
 class CategoryRequest(BaseModel):
     """Request body for creating or renaming a knowledge-base category."""
 
     name: str = Field(min_length=1, max_length=40)
+
+
+class FolderRequest(BaseModel):
+    """Request body for creating or renaming a folder path."""
+
+    name: str = Field(min_length=1, max_length=120)
+    parentPath: Optional[str] = None
 
 
 class AuthRegisterRequest(BaseModel):
@@ -85,7 +93,8 @@ class DocumentUpdateRequest(BaseModel):
     """Request body for renaming one document and moving it into another category."""
 
     source: str = Field(min_length=1, max_length=255)
-    category: str = Field(min_length=1, max_length=40)
+    category: str = Field(default="默认", min_length=1, max_length=120)
+    folderPath: Optional[str] = Field(default=None, max_length=120)
 
 
 @app.get("/health")
@@ -144,13 +153,17 @@ def logout(authorization: Optional[str] = Header(default=None)) -> dict[str, obj
 async def upload(
     file: UploadFile = File(...),
     category: str = Form("默认"),
+    folderPath: Optional[str] = Form(default=None),
     current_user: dict[str, str] = Depends(require_auth),
 ) -> dict[str, object]:
     """Upload a document and add its parsed chunks to the knowledge base."""
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
-    return agent.upload_bytes(file.filename or "upload.pdf", content, category=category)
+    try:
+        return agent.upload_bytes(file.filename or "upload.pdf", content, category=category, folder_path=folderPath)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/documents")
@@ -163,18 +176,68 @@ def list_documents(current_user: dict[str, str] = Depends(require_auth)) -> dict
 @app.get("/categories")
 def list_categories(current_user: dict[str, str] = Depends(require_auth)) -> dict[str, object]:
     """List knowledge-base categories currently available for upload and query."""
-    categories = agent.list_categories()
+    categories = agent.list_folders()
     return {"items": categories, "count": len(categories)}
+
+
+@app.get("/folders")
+def list_folders(current_user: dict[str, str] = Depends(require_auth)) -> dict[str, object]:
+    """List folder paths currently available for upload, query, and document management."""
+    folders = agent.list_folders()
+    return {"items": folders, "count": len(folders)}
+
+
+@app.post("/folders")
+def add_folder(request: FolderRequest, current_user: dict[str, str] = Depends(require_auth)) -> dict[str, object]:
+    """Create a new folder path, optionally below an existing parent folder."""
+    try:
+        result = agent.add_folder(request.name, parent_path=request.parentPath)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    folders = agent.list_folders()
+    return {**result, "items": folders, "count": len(folders)}
+
+
+@app.put("/folders/{folder_path:path}")
+def rename_folder(
+    folder_path: str,
+    request: FolderRequest,
+    current_user: dict[str, str] = Depends(require_auth),
+) -> dict[str, object]:
+    """Rename one folder path and update any nested documents and folders."""
+    try:
+        result = agent.rename_folder(folder_path, request.name)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    folders = agent.list_folders()
+    return {**result, "items": folders, "count": len(folders)}
+
+
+@app.delete("/folders/{folder_path:path}")
+def delete_folder(folder_path: str, current_user: dict[str, str] = Depends(require_auth)) -> dict[str, object]:
+    """Delete one folder and move nested documents to the default folder."""
+    try:
+        result = agent.delete_folder(folder_path)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    folders = agent.list_folders()
+    return {**result, "items": folders, "count": len(folders)}
 
 
 @app.post("/categories")
 def add_category(request: CategoryRequest, current_user: dict[str, str] = Depends(require_auth)) -> dict[str, object]:
     """Create a new knowledge-base category for future uploads and filtering."""
     try:
-        result = agent.add_category(request.name)
+        result = agent.add_folder(request.name)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    categories = agent.list_categories()
+    categories = agent.list_folders()
     return {**result, "items": categories, "count": len(categories)}
 
 
@@ -186,12 +249,12 @@ def rename_category(
 ) -> dict[str, object]:
     """Rename one knowledge-base category and update its existing documents."""
     try:
-        result = agent.rename_category(category_name, request.name)
+        result = agent.rename_folder(category_name, request.name)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    categories = agent.list_categories()
+    categories = agent.list_folders()
     return {**result, "items": categories, "count": len(categories)}
 
 
@@ -199,12 +262,12 @@ def rename_category(
 def delete_category(category_name: str, current_user: dict[str, str] = Depends(require_auth)) -> dict[str, object]:
     """Delete one category and move its documents to the default category."""
     try:
-        result = agent.delete_category(category_name)
+        result = agent.delete_folder(category_name)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    categories = agent.list_categories()
+    categories = agent.list_folders()
     return {**result, "items": categories, "count": len(categories)}
 
 
@@ -225,7 +288,7 @@ def update_document(
 ) -> dict[str, object]:
     """Update one indexed document's display name and category."""
     try:
-        return agent.update_document(document_id, request.source, request.category)
+        return agent.update_document(document_id, request.source, request.category, folder_path=request.folderPath)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -240,6 +303,7 @@ def query(request: QueryRequest, current_user: dict[str, str] = Depends(require_
         use_online_fallback=request.useOnlineFallback,
         user_id=request.userId,
         category=request.category,
+        folder_path=request.folderPath,
     )
     return query_response_to_dict(response)
 
@@ -256,6 +320,7 @@ def stream_query(request: QueryRequest, current_user: dict[str, str] = Depends(r
                 use_online_fallback=request.useOnlineFallback,
                 user_id=request.userId,
                 category=request.category,
+                folder_path=request.folderPath,
             ):
                 yield sse_event(str(event["event"]), dict(event["data"]))
         except Exception as exc:  # pragma: no cover - defensive API guard

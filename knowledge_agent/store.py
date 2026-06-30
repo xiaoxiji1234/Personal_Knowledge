@@ -10,6 +10,7 @@ from .models import DocumentChunk, DocumentSummary, RetrievalResult
 
 
 DEFAULT_CATEGORY = "默认"
+MAX_FOLDER_DEPTH = 3
 
 
 class JsonVectorStore:
@@ -40,8 +41,8 @@ class JsonVectorStore:
             )
             for item in payload.get("chunks", [])
         }
-        loaded_categories = {_safe_category_name(item) for item in payload.get("categories", [])}
-        chunk_categories = {_safe_category_name(chunk.meta.get("category")) for chunk in self.chunks.values()}
+        loaded_categories = {_safe_folder_path(item) for item in payload.get("categories", [])}
+        chunk_categories = {_safe_folder_path(chunk.meta.get("folderPath") or chunk.meta.get("category")) for chunk in self.chunks.values()}
         self.categories = {DEFAULT_CATEGORY, *loaded_categories, *chunk_categories}
 
     def save(self) -> None:
@@ -59,8 +60,9 @@ class JsonVectorStore:
         for chunk in chunks:
             chunk.embedding = self.embedding_model.embed(chunk.content)
             chunk.vector_id = chunk.vector_id or chunk.id
-            category = _safe_category_name(chunk.meta.get("category"))
+            category = _safe_folder_path(chunk.meta.get("folderPath") or chunk.meta.get("category"))
             chunk.meta["category"] = category
+            chunk.meta["folderPath"] = category
             self.categories.add(category)
             self.chunks[chunk.id] = chunk
             count += 1
@@ -72,7 +74,7 @@ class JsonVectorStore:
         query_embedding = self.embedding_model.embed(query)
         scored: list[RetrievalResult] = []
         for chunk in self.chunks.values():
-            if category and _safe_category_name(chunk.meta.get("category")) != category:
+            if category and _safe_folder_path(chunk.meta.get("folderPath") or chunk.meta.get("category")) != category:
                 continue
             score = self.embedding_model.similarity(query_embedding, chunk.embedding)
             if score <= 0:
@@ -102,6 +104,7 @@ class JsonVectorStore:
         documents: list[DocumentSummary] = []
         for doc_id, chunks in grouped.items():
             first = sorted(chunks, key=lambda item: item.id)[0]
+            folder_path = _optional_str(first.meta.get("folderPath") or first.meta.get("category")) or DEFAULT_CATEGORY
             documents.append(
                 DocumentSummary(
                     doc_id=doc_id,
@@ -110,7 +113,8 @@ class JsonVectorStore:
                     parser=_optional_str(first.meta.get("parser")),
                     quality=_optional_str(first.meta.get("quality")),
                     pages=_optional_int(first.meta.get("pages")),
-                    category=_optional_str(first.meta.get("category")) or DEFAULT_CATEGORY,
+                    category=folder_path,
+                    folder_path=folder_path,
                 )
             )
         documents.sort(key=lambda item: (item.category, item.source))
@@ -128,13 +132,14 @@ class JsonVectorStore:
     def update_document(self, doc_id: str, source: str, category: str) -> int:
         """Update one document's display name and category across all of its chunks."""
         updated = 0
-        normalized_category = _safe_category_name(category)
+        normalized_category = _safe_folder_path(category)
         self.categories.add(normalized_category)
         for chunk in self.chunks.values():
             if chunk.doc_id != doc_id:
                 continue
             chunk.source = source
             chunk.meta["category"] = normalized_category
+            chunk.meta["folderPath"] = normalized_category
             updated += 1
         if updated:
             self.save()
@@ -145,46 +150,72 @@ class JsonVectorStore:
         categories = {DEFAULT_CATEGORY, *self.categories}
         return [DEFAULT_CATEGORY, *sorted(category for category in categories if category != DEFAULT_CATEGORY)]
 
+    def list_folders(self) -> list[str]:
+        """Return all persisted folder paths with the default folder first."""
+        return self.list_categories()
+
     def add_category(self, category: str) -> bool:
         """Add one category to the store and report whether it was newly created."""
-        normalized = _safe_category_name(category)
+        normalized = _safe_folder_path(category)
         if normalized in self.categories:
             return False
         self.categories.add(normalized)
         self.save()
         return True
 
+    def add_folder(self, folder_path: str) -> bool:
+        """Add one folder path to the store and report whether it was newly created."""
+        return self.add_category(folder_path)
+
     def rename_category(self, old_category: str, new_category: str) -> int:
         """Rename a category and update all chunks that currently belong to it."""
-        old_normalized = _safe_category_name(old_category)
-        new_normalized = _safe_category_name(new_category)
-        self.categories.discard(old_normalized)
-        self.categories.add(new_normalized)
+        old_normalized = _safe_folder_path(old_category)
+        new_normalized = _safe_folder_path(new_category)
+        self.categories = {
+            _replace_folder_prefix(category, old_normalized, new_normalized) for category in self.categories
+        }
         updated = 0
         for chunk in self.chunks.values():
-            if _safe_category_name(chunk.meta.get("category")) == old_normalized:
-                chunk.meta["category"] = new_normalized
+            current = _safe_folder_path(chunk.meta.get("folderPath") or chunk.meta.get("category"))
+            if _is_same_or_child_folder(current, old_normalized):
+                next_path = _replace_folder_prefix(current, old_normalized, new_normalized)
+                chunk.meta["category"] = next_path
+                chunk.meta["folderPath"] = next_path
                 updated += 1
         self.save()
         return updated
+
+    def rename_folder(self, old_path: str, new_path: str) -> int:
+        """Rename a folder path and all nested child folder paths."""
+        return self.rename_category(old_path, new_path)
 
     def delete_category(self, category: str, fallback_category: str = DEFAULT_CATEGORY) -> int:
         """Delete one category and reassign its chunks to the fallback category."""
-        normalized = _safe_category_name(category)
-        fallback = _safe_category_name(fallback_category)
-        self.categories.discard(normalized)
+        normalized = _safe_folder_path(category)
+        fallback = _safe_folder_path(fallback_category)
+        self.categories = {category for category in self.categories if not _is_same_or_child_folder(category, normalized)}
         self.categories.add(fallback)
         updated = 0
         for chunk in self.chunks.values():
-            if _safe_category_name(chunk.meta.get("category")) == normalized:
+            current = _safe_folder_path(chunk.meta.get("folderPath") or chunk.meta.get("category"))
+            if _is_same_or_child_folder(current, normalized):
                 chunk.meta["category"] = fallback
+                chunk.meta["folderPath"] = fallback
                 updated += 1
         self.save()
         return updated
 
+    def delete_folder(self, folder_path: str, fallback_folder: str = DEFAULT_CATEGORY) -> int:
+        """Delete one folder path and move nested documents into the fallback folder."""
+        return self.delete_category(folder_path, fallback_category=fallback_folder)
+
     def category_exists(self, category: str) -> bool:
         """Return whether a normalized category is currently persisted."""
-        return _safe_category_name(category) in self.categories
+        return _safe_folder_path(category) in self.categories
+
+    def folder_exists(self, folder_path: str) -> bool:
+        """Return whether a normalized folder path is currently persisted."""
+        return self.category_exists(folder_path)
 
 
 def _optional_str(value: object) -> str | None:
@@ -204,9 +235,26 @@ def _optional_int(value: object) -> int | None:
         return None
 
 
-def _safe_category_name(value: object) -> str:
-    """Convert stored category metadata into a non-empty category name."""
+def _safe_folder_path(value: object) -> str:
+    """Convert stored folder metadata into a normalized non-empty folder path."""
     if value is None:
         return DEFAULT_CATEGORY
-    category = str(value).strip()
-    return category or DEFAULT_CATEGORY
+    parts = [part.strip() for part in str(value).split("/")]
+    clean_parts = [part for part in parts if part]
+    if not clean_parts:
+        return DEFAULT_CATEGORY
+    return "/".join(clean_parts[:MAX_FOLDER_DEPTH])
+
+
+def _is_same_or_child_folder(folder_path: str, parent_path: str) -> bool:
+    """Return whether one folder path is the same as or nested below another."""
+    return folder_path == parent_path or folder_path.startswith(f"{parent_path}/")
+
+
+def _replace_folder_prefix(folder_path: str, old_prefix: str, new_prefix: str) -> str:
+    """Replace one folder path prefix while preserving child path suffixes."""
+    if folder_path == old_prefix:
+        return new_prefix
+    if folder_path.startswith(f"{old_prefix}/"):
+        return f"{new_prefix}/{folder_path[len(old_prefix) + 1:]}"
+    return folder_path

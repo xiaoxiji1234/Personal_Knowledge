@@ -7,7 +7,6 @@ import {
   Expand,
   Files,
   Fold,
-  FolderAdd,
   HomeFilled,
   SwitchButton,
   UserFilled,
@@ -27,7 +26,6 @@ const activeMenu = computed(() => String(route.name ?? 'qa'))
 const menuItems = [
   { key: 'qa', label: '知识库问答', icon: ChatLineRound },
   { key: 'manage', label: '知识库管理', icon: Files },
-  { key: 'category-manage', label: '分类管理', icon: FolderAdd },
 ]
 
 /**

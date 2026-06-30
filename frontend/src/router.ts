@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuth } from './composables/useAuth'
 import MainLayout from './layouts/MainLayout.vue'
-import CategoryManagePage from './pages/CategoryManagePage.vue'
 import KnowledgeManagePage from './pages/KnowledgeManagePage.vue'
 import KnowledgeQaPage from './pages/KnowledgeQaPage.vue'
 import LoginPage from './pages/LoginPage.vue'
@@ -45,12 +44,6 @@ export const router = createRouter({
           name: 'manage',
           component: KnowledgeManagePage,
           meta: { title: '知识库管理' },
-        },
-        {
-          path: 'categories',
-          name: 'category-manage',
-          component: CategoryManagePage,
-          meta: { title: '分类管理' },
         },
       ],
     },
