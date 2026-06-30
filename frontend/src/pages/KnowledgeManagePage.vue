@@ -240,6 +240,7 @@ function saveEditingFolder() {
               class="file-manager-name"
               :class="{ active: row.type === 'folder' && row.path === selectedManageFolderPath }"
             >
+              <span v-if="row.type === 'folder'" class="file-manager-folder-pad" aria-hidden="true"></span>
               <el-icon v-if="row.type === 'folder'" class="file-manager-folder-icon"><Folder /></el-icon>
               <el-icon v-else class="file-manager-file-icon"><Document /></el-icon>
               <template v-if="row.type === 'folder' && editingFolderPath === row.path">

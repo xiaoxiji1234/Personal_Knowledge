@@ -507,12 +507,24 @@ h3 {
   margin-right: 6px;
 }
 
+.file-manager-card .el-table .cell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
 .file-manager-name {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1 1 auto;
   min-width: 0;
   white-space: nowrap;
+}
+
+.file-manager-folder-pad {
+  flex: 0 0 14px;
+  width: 14px;
 }
 
 .file-manager-name.active {

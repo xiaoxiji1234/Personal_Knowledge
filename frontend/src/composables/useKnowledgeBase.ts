@@ -538,7 +538,7 @@ async function ensureFolderPathExists(folderPath: string) {
     if (folders.value.includes(currentPath)) {
       continue
     }
-    const parentPath = currentPath.includes('/') ? currentPath.slice(0, currentPath.lastIndexOf('/')) : defaultFolderPath
+    const parentPath = currentPath.includes('/') ? currentPath.slice(0, currentPath.lastIndexOf('/')) : null
     const response = await apiFetch(`${apiBase}/folders`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },

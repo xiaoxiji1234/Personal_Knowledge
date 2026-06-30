@@ -158,6 +158,16 @@ class KnowledgeAgentTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 agent.add_folder("Q1", parent_path="产品/需求/2026")
 
+    def test_create_root_folder_without_parent_path(self) -> None:
+        """Root-level folders should be creatable without passing the default folder as parent."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            agent = self.make_agent(Path(tmpdir))
+
+            result = agent.add_folder("白虎纪", parent_path=None)
+
+            self.assertEqual(result["folderPath"], "白虎纪")
+            self.assertIn("白虎纪", agent.list_folders())
+
     def test_rename_parent_folder_updates_children_and_documents(self) -> None:
         """Renaming a parent folder should update child folders and document folder paths."""
         with tempfile.TemporaryDirectory() as tmpdir:
