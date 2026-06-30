@@ -498,6 +498,7 @@ async function uploadFile() {
   uploadError.value = ''
   try {
     const folderPath = normalizeFolderPath(uploadFolderPath.value)
+    await ensureFolderPathExists(folderPath)
     const form = new FormData()
     form.append('file', selectedFile.value)
     form.append('category', folderPath)
@@ -520,6 +521,31 @@ async function uploadFile() {
     uploadError.value = error instanceof Error ? error.message : '上传失败'
   } finally {
     isUploading.value = false
+  }
+}
+
+/**
+ * Create any missing folders in one user-entered path before uploading a file there.
+ */
+async function ensureFolderPathExists(folderPath: string) {
+  if (!folderPath || folderPath === defaultFolderPath || folders.value.includes(folderPath)) {
+    return
+  }
+  const segments = folderPath.split('/')
+  let currentPath = ''
+  for (const segment of segments) {
+    currentPath = currentPath ? `${currentPath}/${segment}` : segment
+    if (folders.value.includes(currentPath)) {
+      continue
+    }
+    const parentPath = currentPath.includes('/') ? currentPath.slice(0, currentPath.lastIndexOf('/')) : defaultFolderPath
+    const response = await apiFetch(`${apiBase}/folders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ name: segment, parentPath }),
+    })
+    await readApiPayload(response)
+    folders.value = normalizeFolderList([...folders.value, currentPath])
   }
 }
 

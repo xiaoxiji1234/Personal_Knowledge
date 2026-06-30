@@ -7,8 +7,6 @@ import {
   Edit,
   Files,
   Folder,
-  FolderOpened,
-  Plus,
   Search,
   UploadFilled,
 } from '@element-plus/icons-vue'
@@ -48,11 +46,9 @@ type FileManagerRow = {
 }
 
 const {
-  addFolder,
   beforeUpload,
   cancelEditDocument,
   cancelEditFolder,
-  canCreateChildFolder,
   closeUploadDialog,
   defaultFolderPath,
   deleteDocument,
@@ -76,7 +72,6 @@ const {
   isSavingFolder,
   isUploadDialogOpen,
   isUploading,
-  newFolderName,
   onUploadRemove,
   openUploadDialog,
   saveDocumentChanges,
@@ -206,26 +201,6 @@ function saveEditingFolder() {
             placeholder="搜索文件夹或文件"
             style="width: 240px;"
           />
-          <div class="folder-create-bar manager-create-bar">
-            <el-input
-              v-model="newFolderName"
-              clearable
-              size="small"
-              :disabled="!canCreateChildFolder || isSavingFolder"
-              :placeholder="canCreateChildFolder ? `在“${selectedFolderLabel}”下新增` : '第 3 级不能继续新增'"
-              @keydown.enter.prevent="addFolder"
-            />
-            <el-button
-              size="small"
-              type="primary"
-              :icon="Plus"
-              title="新增子文件夹"
-              aria-label="新增子文件夹"
-              :disabled="!canCreateChildFolder || !newFolderName.trim()"
-              :loading="isSavingFolder && !editingFolderPath"
-              @click="addFolder"
-            />
-          </div>
         </div>
         <div class="inline-actions">
           <el-button type="primary" :icon="DocumentAdd" @click="openUploadDialog">上传文件</el-button>
@@ -265,14 +240,7 @@ function saveEditingFolder() {
               class="file-manager-name"
               :class="{ active: row.type === 'folder' && row.path === selectedManageFolderPath }"
             >
-              <el-button
-                v-if="row.type === 'folder'"
-                class="file-manager-expand"
-                text
-                size="small"
-                :icon="row.path === selectedManageFolderPath ? FolderOpened : Folder"
-                @click.stop="selectManageFolder(row.path)"
-              />
+              <el-icon v-if="row.type === 'folder'" class="file-manager-folder-icon"><Folder /></el-icon>
               <el-icon v-else class="file-manager-file-icon"><Document /></el-icon>
               <template v-if="row.type === 'folder' && editingFolderPath === row.path">
                 <el-input
@@ -336,7 +304,7 @@ function saveEditingFolder() {
             <span>{{ row.type === 'document' ? row.quality || '-' : '-' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" align="right" width="220">
+        <el-table-column label="操作" width="120">
           <template #default="{ row }">
             <div class="document-row-actions">
               <template v-if="row.type === 'folder'">
@@ -345,33 +313,20 @@ function saveEditingFolder() {
                   <el-button size="small" @click.stop="cancelEditFolder">取消</el-button>
                 </template>
                 <template v-else>
-                  <el-button
-                    size="small"
-                    text
-                    :icon="Plus"
-                    :disabled="folderDepth(row.path) >= 3"
-                    @click.stop="selectManageFolder(row.path)"
-                  >
-                    选为目标
-                  </el-button>
-                  <el-button
+                  <el-icon
                     v-if="row.path !== defaultFolderPath"
-                    circle
-                    text
-                    size="small"
-                    :icon="Edit"
+                    class="table-action-icon"
                     @click.stop="startEditFolder(row.path)"
-                  />
-                  <el-button
+                  >
+                    <Edit />
+                  </el-icon>
+                  <el-icon
                     v-if="row.path !== defaultFolderPath"
-                    circle
-                    text
-                    type="danger"
-                    size="small"
-                    :icon="Delete"
-                    :loading="deletingFolderPath === row.path"
+                    class="table-action-icon danger"
                     @click.stop="deleteFolder(row.path)"
-                  />
+                  >
+                    <Delete />
+                  </el-icon>
                 </template>
               </template>
               <template v-else-if="row.document">
@@ -380,15 +335,12 @@ function saveEditingFolder() {
                   <el-button size="small" @click.stop="cancelEditDocument">取消</el-button>
                 </template>
                 <template v-else>
-                  <el-button circle text size="small" :icon="Edit" @click.stop="startEditDocument(row.document)" />
-                  <el-button
-                    circle
-                    text
-                    type="danger"
-                    :icon="Delete"
-                    :loading="deletingDocumentId === row.document.documentId"
-                    @click.stop="deleteDocument(row.document)"
-                  />
+                  <el-icon class="table-action-icon" @click.stop="startEditDocument(row.document)">
+                    <Edit />
+                  </el-icon>
+                  <el-icon class="table-action-icon danger" @click.stop="deleteDocument(row.document)">
+                    <Delete />
+                  </el-icon>
                 </template>
               </template>
             </div>
@@ -432,7 +384,13 @@ function saveEditingFolder() {
         />
         <el-form label-position="top">
           <el-form-item label="知识库文件夹">
-            <el-select v-model="uploadFolderPath" filterable placeholder="选择文件夹">
+            <el-select
+              v-model="uploadFolderPath"
+              allow-create
+              filterable
+              default-first-option
+              placeholder="选择或输入新文件夹"
+            >
               <el-option v-for="folderPath in folderOptions" :key="folderPath" :label="folderPath" :value="folderPath" />
             </el-select>
           </el-form-item>

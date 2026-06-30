@@ -490,16 +490,6 @@ h3 {
   height: calc(100vh - 280px);
 }
 
-.folder-create-bar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-}
-
-.manager-create-bar {
-  width: 280px;
-}
-
 .file-manager-card .el-table {
   height: calc(100vh - 270px);
 }
@@ -508,24 +498,34 @@ h3 {
   cursor: default;
 }
 
+.file-manager-card .el-table__indent,
+.file-manager-card .el-table__placeholder {
+  width: 0 !important;
+}
+
+.file-manager-card .el-table__expand-icon {
+  margin-right: 6px;
+}
+
 .file-manager-name {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  white-space: nowrap;
 }
 
 .file-manager-name.active {
   color: var(--admin-primary);
 }
 
-.file-manager-expand,
+.file-manager-folder-icon,
 .file-manager-file-icon {
   flex: 0 0 auto;
   color: #64748b;
 }
 
-.file-manager-name.active .file-manager-expand,
+.file-manager-name.active .file-manager-folder-icon,
 .file-manager-file-icon {
   color: var(--admin-primary);
 }
@@ -533,6 +533,7 @@ h3 {
 .file-manager-title {
   display: grid;
   gap: 2px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -578,9 +579,24 @@ h3 {
 .category-manage-actions {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.table-action-icon {
+  cursor: pointer;
+  color: #6b7280;
+  font-size: 16px;
+  transition: color 0.15s ease;
+}
+
+.table-action-icon:hover {
+  color: var(--admin-primary);
+}
+
+.table-action-icon.danger:hover {
+  color: var(--admin-danger);
 }
 
 .category-manage-main {
