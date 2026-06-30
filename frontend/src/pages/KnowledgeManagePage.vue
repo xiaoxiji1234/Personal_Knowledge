@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import {
   Delete,
   Document,
@@ -7,6 +7,7 @@ import {
   Edit,
   Files,
   Folder,
+  FolderAdd,
   Search,
   UploadFilled,
 } from '@element-plus/icons-vue'
@@ -46,7 +47,9 @@ type FileManagerRow = {
 }
 
 const {
+  canCreateChildFolder,
   beforeUpload,
+  addFolder,
   cancelEditDocument,
   cancelEditFolder,
   closeUploadDialog,
@@ -72,6 +75,7 @@ const {
   isSavingFolder,
   isUploadDialogOpen,
   isUploading,
+  newFolderName,
   onUploadRemove,
   openUploadDialog,
   saveDocumentChanges,
@@ -88,9 +92,12 @@ const {
   uploadRef,
 } = useKnowledgeBase()
 
-const selectedFolderLabel = computed(() => selectedManageFolderPath.value || defaultFolderPath)
+const isCreatingFolder = ref(false)
+const creatingParentPath = ref<string | null>(null)
+
+const selectedFolderLabel = computed(() => selectedManageFolderPath.value || '根目录')
 const pageDescription = computed(() => `当前目标文件夹：${selectedFolderLabel.value}`)
-const fileManagerRows = computed(() => folderTree.value.map((node) => folderNodeToRow(node)))
+const fileManagerRows = computed(() => insertCreatingRow(folderTree.value.map((node) => folderNodeToRow(node))))
 const filteredFileManagerRows = computed(() => filterRowsByKeyword(fileManagerRows.value, documentSearch.value.trim().toLowerCase()))
 const selectedDirectDocumentCount = computed(() => countDirectDocuments(selectedManageFolderPath.value))
 
@@ -177,9 +184,81 @@ function selectFolderRow(row: FileManagerRow) {
 }
 
 /**
+ * Open one inline create row either at root level or at the end of a selected folder.
+ */
+function startCreateFolder() {
+  if (!canCreateChildFolder.value) return
+  newFolderName.value = ''
+  isCreatingFolder.value = true
+  creatingParentPath.value = selectedManageFolderPath.value || null
+}
+
+/**
+ * Close the inline create row and clear the draft folder name.
+ */
+function cancelCreateFolder() {
+  isCreatingFolder.value = false
+  creatingParentPath.value = null
+  newFolderName.value = ''
+}
+
+/**
+ * Insert one temporary inline row where the next folder should be created.
+ */
+function insertCreatingRow(rows: FileManagerRow[]) {
+  if (!isCreatingFolder.value) {
+    return rows
+  }
+  if (creatingParentPath.value === null) {
+    return [
+      ...rows,
+      createDraftFolderRow(null),
+    ]
+  }
+  return injectDraftRow(rows, creatingParentPath.value)
+}
+
+/**
+ * Build a temporary row used by the inline folder-creation editor.
+ */
+function createDraftFolderRow(parentPath: string | null): FileManagerRow {
+  return {
+    key: `draft-folder:${parentPath || 'root'}`,
+    type: 'folder',
+    name: '',
+    path: parentPath || '',
+    level: parentPath ? parentPath.split('/').length + 1 : 1,
+    documentCount: 0,
+    children: [],
+  }
+}
+
+/**
+ * Recursively append the draft row to the selected folder's children list.
+ */
+function injectDraftRow(rows: FileManagerRow[], parentPath: string): FileManagerRow[] {
+  return rows.map((row) => {
+    if (row.type !== 'folder') return row
+    if (row.path === parentPath) {
+      return { ...row, children: [...row.children, createDraftFolderRow(parentPath)] }
+    }
+    return { ...row, children: injectDraftRow(row.children, parentPath) }
+  })
+}
+
+/**
  * Save the folder currently being renamed from an inline table input.
  */
-function saveEditingFolder() {
+async function saveEditingFolder() {
+  if (isCreatingFolder.value) {
+    const created = await addFolder(creatingParentPath.value)
+    if (created) {
+      creatingParentPath.value = null
+      isCreatingFolder.value = false
+      newFolderName.value = ''
+    }
+    return
+  }
   if (!editingFolderPath.value) return
   void saveFolderName(editingFolderPath.value)
 }
@@ -220,6 +299,7 @@ function documentTypeTag(source: string) {
           />
         </div>
         <div class="inline-actions">
+          <el-button :icon="FolderAdd" :disabled="!canCreateChildFolder" @click="startCreateFolder">新建文件夹</el-button>
           <el-button type="primary" :icon="DocumentAdd" @click="openUploadDialog">上传文件</el-button>
         </div>
       </div>
@@ -260,7 +340,18 @@ function documentTypeTag(source: string) {
               <span v-if="row.type === 'folder'" class="file-manager-folder-pad" aria-hidden="true"></span>
               <el-icon v-if="row.type === 'folder'" class="file-manager-folder-icon"><Folder /></el-icon>
               <el-icon v-else class="file-manager-file-icon"><Document /></el-icon>
-              <template v-if="row.type === 'folder' && editingFolderPath === row.path">
+              <template v-if="row.key.startsWith('draft-folder:')">
+                <el-input
+                  v-model="newFolderName"
+                  size="small"
+                  autofocus
+                  placeholder="新建文件夹名称"
+                  @keydown.enter.prevent="saveEditingFolder"
+                  @keydown.esc.prevent="cancelCreateFolder"
+                  @click.stop
+                />
+              </template>
+              <template v-else-if="row.type === 'folder' && editingFolderPath === row.path">
                 <el-input
                   v-model="editingFolderName"
                   size="small"
@@ -326,7 +417,11 @@ function documentTypeTag(source: string) {
           <template #default="{ row }">
             <div class="document-row-actions">
               <template v-if="row.type === 'folder'">
-                <template v-if="editingFolderPath === row.path">
+                <template v-if="row.key.startsWith('draft-folder:')">
+                  <el-button size="small" type="primary" :loading="isSavingFolder" @click.stop="saveEditingFolder">保存</el-button>
+                  <el-button size="small" @click.stop="cancelCreateFolder">取消</el-button>
+                </template>
+                <template v-else-if="editingFolderPath === row.path">
                   <el-button size="small" type="primary" :loading="isSavingFolder" @click.stop="saveEditingFolder">保存</el-button>
                   <el-button size="small" @click.stop="cancelEditFolder">取消</el-button>
                 </template>

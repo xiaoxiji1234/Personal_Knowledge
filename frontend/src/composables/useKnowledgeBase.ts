@@ -97,7 +97,7 @@ const editingDocumentId = ref<string | null>(null)
 const editingDocumentName = ref('')
 const editingDocumentFolderPath = ref(defaultFolderPath)
 const isSavingDocument = ref(false)
-const selectedManageFolderPath = ref(defaultFolderPath)
+const selectedManageFolderPath = ref('')
 const documentSearch = ref('')
 const newFolderName = ref('')
 const editingFolderPath = ref('')
@@ -344,7 +344,7 @@ function closeUploadDialog() {
 /**
  * Create a folder below the selected folder, with root-level behavior for the default folder.
  */
-async function addFolder(): Promise<string | null> {
+async function addFolder(parentPathOverride: string | null = null): Promise<string | null> {
   const name = newFolderName.value.trim()
   if (!name) return null
   if (!canCreateChildFolder.value) {
@@ -353,10 +353,12 @@ async function addFolder(): Promise<string | null> {
   }
   isSavingFolder.value = true
   try {
+    const activeParentPath = parentPathOverride !== null ? parentPathOverride : selectedManageFolderPath.value
+    const parentPath = activeParentPath && activeParentPath !== defaultFolderPath ? activeParentPath : null
     const response = await apiFetch(`${apiBase}/folders`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-      body: JSON.stringify({ name, parentPath: selectedManageFolderPath.value || defaultFolderPath }),
+      body: JSON.stringify({ name, parentPath }),
     })
     const payload = await readApiPayload(response)
     const folderPath = String(payload.folderPath || payload.name || name)
@@ -1013,8 +1015,8 @@ function normalizeFolderList(items: string[] | undefined) {
  * Keep selected upload/query folders valid after a folder list refresh.
  */
 function syncFolderSelections() {
-  if (!folders.value.includes(selectedManageFolderPath.value)) {
-    selectedManageFolderPath.value = defaultFolderPath
+  if (selectedManageFolderPath.value && !folders.value.includes(selectedManageFolderPath.value)) {
+    selectedManageFolderPath.value = ''
   }
   if (!folders.value.includes(uploadFolderPath.value)) {
     uploadFolderPath.value = selectedManageFolderPath.value || defaultFolderPath
@@ -1098,7 +1100,7 @@ function updateFolderReferences(oldPath: string, nextPath: string) {
  */
 function resetDeletedFolderReferences(deletedPath: string) {
   if (isSameOrChildFolder(selectedManageFolderPath.value, deletedPath)) {
-    selectedManageFolderPath.value = defaultFolderPath
+    selectedManageFolderPath.value = ''
   }
   if (isSameOrChildFolder(uploadFolderPath.value, deletedPath)) {
     uploadFolderPath.value = defaultFolderPath
