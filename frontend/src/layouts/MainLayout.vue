@@ -68,9 +68,6 @@ async function handleLogout() {
       <el-menu
         :default-active="activeMenu"
         :collapse="isSidebarCollapsed"
-        background-color="#001529"
-        text-color="#a6adb9"
-        active-text-color="#ffffff"
         class="admin-menu"
         @select="handleSelect"
       >
