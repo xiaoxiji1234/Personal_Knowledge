@@ -1,0 +1,33 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      KNOWLEDGE_AGENT_DATA_DIR: /data
+      KNOWLEDGE_AGENT_UPLOAD_DIR: /data/uploads
+      KNOWLEDGE_AGENT_INDEX_PATH: /data/index/store.json
+      KNOWLEDGE_AGENT_USERS_PATH: /data/auth/users.json
+      LLM_PROVIDER: local
+      SEARCH_ENDPOINT: ${SEARCH_ENDPOINT:-}
+      SEARCH_API_KEY: ${SEARCH_API_KEY:-}
+      LLM_ENDPOINT: ${LLM_ENDPOINT:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+    volumes:
+      - knowledge-data:/data
+    expose:
+      - "8000"
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  knowledge-data:

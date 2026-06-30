@@ -106,6 +106,49 @@ npm run build
 3. 静态服务器将 `/api` 代理到后端
 4. `data/` 目录挂载到持久化磁盘
 
+## Docker 部署
+
+这个项目提供了一套最小可用的 Docker 方案：
+
+- `api`：Python FastAPI 后端
+- `web`：Nginx 托管的前端静态站点
+- `knowledge-data`：本地持久化数据卷
+
+### 启动
+
+```bash
+docker compose up --build
+```
+
+启动后访问：
+
+- 前端：`http://127.0.0.1:8080`
+- 后端：容器内通过 `api:8000` 互联，前端通过 `/api` 自动转发
+
+### 环境变量
+
+如果你要接入联网搜索或外部 LLM，可以在启动前导出变量：
+
+```bash
+export SEARCH_ENDPOINT="https://your-search-service.example/search"
+export SEARCH_API_KEY="optional-token"
+export LLM_PROVIDER="http"
+export LLM_ENDPOINT="https://your-llm-gateway.example/answer"
+export LLM_API_KEY="optional-token"
+```
+
+如果不设置，项目默认使用本地抽取式回答和空搜索 provider。
+
+### 数据持久化
+
+Docker Compose 会把运行数据写入命名卷 `knowledge-data`，对应目录如下：
+
+- `/data/index/store.json`
+- `/data/uploads/`
+- `/data/auth/users.json`
+
+如果你希望把数据落到宿主机目录，也可以把 `docker-compose.yml` 里的卷改成 bind mount。
+
 ### 运行数据
 
 项目运行时会写入这些位置：

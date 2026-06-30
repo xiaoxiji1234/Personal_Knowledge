@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
@@ -33,7 +31,7 @@ def sse_event(event: str, data: dict[str, object]) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def read_bearer_token(authorization: str | None) -> str | None:
+def read_bearer_token(authorization: Optional[str]) -> Optional[str]:
     """Extract one bearer token from the Authorization header when present."""
     value = (authorization or "").strip()
     if not value.lower().startswith("bearer "):
@@ -42,7 +40,7 @@ def read_bearer_token(authorization: str | None) -> str | None:
     return token or None
 
 
-def require_auth(authorization: str | None = Header(default=None)) -> dict[str, str]:
+def require_auth(authorization: Optional[str] = Header(default=None)) -> dict[str, str]:
     """Require a valid bearer token before allowing protected knowledge-base access."""
     token = read_bearer_token(authorization)
     user = auth_store.get_user_by_token(token)
@@ -122,7 +120,7 @@ def login(request: AuthLoginRequest) -> dict[str, object]:
 
 
 @app.get("/auth/me")
-def auth_me(authorization: str | None = Header(default=None)) -> dict[str, object]:
+def auth_me(authorization: Optional[str] = Header(default=None)) -> dict[str, object]:
     """Return the public profile of the current signed-in local user."""
     token = read_bearer_token(authorization)
     user = auth_store.get_user_by_token(token)
@@ -132,7 +130,7 @@ def auth_me(authorization: str | None = Header(default=None)) -> dict[str, objec
 
 
 @app.post("/auth/logout")
-def logout(authorization: str | None = Header(default=None)) -> dict[str, object]:
+def logout(authorization: Optional[str] = Header(default=None)) -> dict[str, object]:
     """Revoke the current signed-in session token."""
     token = read_bearer_token(authorization)
     if not token:
