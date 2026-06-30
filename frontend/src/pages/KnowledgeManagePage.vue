@@ -296,7 +296,7 @@ function saveEditingFolder() {
               <template v-else>
                 <div class="file-manager-title">
                   <strong>{{ row.name }}</strong>
-                  <small>{{ row.type === 'folder' ? row.path : documentFolderPath(row.document) }}</small>
+                  <small v-if="row.type === 'document'">{{ documentFolderPath(row.document) }}</small>
                 </div>
               </template>
             </div>
