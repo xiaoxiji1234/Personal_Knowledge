@@ -921,6 +921,7 @@ function isFolderExpanded(folderPath: string) {
  */
 function buildFolderTree(folderPaths: string[], sourceDocuments: KnowledgeDocument[]): FolderTreeNode[] {
   const nodeMap = new Map<string, FolderTreeNode>()
+  const rootNodes: FolderTreeNode[] = []
   const ensureNode = (path: string): FolderTreeNode => {
     const normalized = normalizeFolderPath(path)
     const existing = nodeMap.get(normalized)
@@ -934,9 +935,11 @@ function buildFolderTree(folderPaths: string[], sourceDocuments: KnowledgeDocume
       documents: [],
     }
     nodeMap.set(normalized, node)
-    if (normalized !== defaultFolderPath) {
-      const parentPath = parentFolderPath(normalized) || defaultFolderPath
+    const parentPath = parentFolderPath(normalized)
+    if (parentPath) {
       ensureNode(parentPath).children.push(node)
+    } else {
+      rootNodes.push(node)
     }
     return node
   }
@@ -953,7 +956,11 @@ function buildFolderTree(folderPaths: string[], sourceDocuments: KnowledgeDocume
     node.documents.sort((left, right) => left.source.localeCompare(right.source, 'zh-Hans-CN'))
     node.documentCount = countNodeDocuments(node)
   }
-  return [ensureNode(defaultFolderPath)]
+  return rootNodes.sort((left, right) => {
+    if (left.path === defaultFolderPath) return -1
+    if (right.path === defaultFolderPath) return 1
+    return left.name.localeCompare(right.name, 'zh-Hans-CN')
+  })
 }
 
 /**
