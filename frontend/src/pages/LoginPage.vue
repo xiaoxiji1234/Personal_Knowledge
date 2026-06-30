@@ -28,8 +28,10 @@ const rules: FormRules<typeof form> = {
  * Submit the login form, then send authenticated users back to the QA page.
  */
 async function submitLogin() {
+  const isValid = await formRef.value?.validate().catch(() => false)
+  if (!isValid) return
+
   try {
-    await formRef.value?.validate()
     await login({
       username: form.username,
       password: form.password,
@@ -61,7 +63,16 @@ async function submitLogin() {
           </div>
         </template>
 
-        <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="auth-form" status-icon>
+        <el-form
+          ref="formRef"
+          :model="form"
+          :rules="rules"
+          label-position="top"
+          class="auth-form"
+          status-icon
+          :show-message="true"
+          :inline-message="false"
+        >
           <el-form-item label="用户名" prop="username">
             <el-input v-model="form.username" placeholder="输入用户名" :prefix-icon="User" @keydown.enter="submitLogin" />
           </el-form-item>

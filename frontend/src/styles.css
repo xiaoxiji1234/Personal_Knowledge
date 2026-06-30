@@ -688,11 +688,15 @@ h3 {
 
 .auth-form {
   display: grid;
-  gap: 12px;
+  gap: 4px;
 }
 
 .auth-form .el-form-item {
-  margin-bottom: 0;
+  margin-bottom: 14px;
+}
+
+.auth-form .el-form-item__error {
+  padding-top: 4px;
 }
 
 .auth-remember {

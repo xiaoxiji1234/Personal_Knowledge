@@ -44,22 +44,13 @@ const rules: FormRules<typeof form> = {
 }
 
 /**
- * Validate the register form locally before sending it to the backend.
- */
-function validateRegisterForm() {
-  if (!form.displayName.trim()) throw new Error('请输入昵称')
-  if (!form.username.trim()) throw new Error('请输入用户名')
-  if (!form.password) throw new Error('请输入密码')
-  if (form.password !== form.confirmPassword) throw new Error('两次输入的密码不一致')
-}
-
-/**
  * Submit the register form and log the new user in immediately.
  */
 async function submitRegister() {
+  const isValid = await formRef.value?.validate().catch(() => false)
+  if (!isValid) return
+
   try {
-    validateRegisterForm()
-    await formRef.value?.validate()
     await register({
       displayName: form.displayName,
       username: form.username,
@@ -92,7 +83,16 @@ async function submitRegister() {
           </div>
         </template>
 
-        <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="auth-form" status-icon>
+        <el-form
+          ref="formRef"
+          :model="form"
+          :rules="rules"
+          label-position="top"
+          class="auth-form"
+          status-icon
+          :show-message="true"
+          :inline-message="false"
+        >
           <el-form-item label="昵称" prop="displayName">
             <el-input
               v-model="form.displayName"
