@@ -1,15 +1,45 @@
 # 个人知识库问答 + 联网查证 Agent
 
-这是一个本地优先的知识库问答系统，支持上传文档、自动切片、向量检索、分类管理和联网查证。项目分为后端 Python FastAPI 服务和前端 Vue3 管理界面，适合做个人知识库、资料问答和轻量 RAG 原型。
+一个本地优先的个人知识库问答系统，支持上传文档、自动切片、向量检索、分类管理和联网查证。项目由 Python FastAPI 后端和 Vue3 前端组成，适合个人知识库、资料整理、团队知识查询和轻量 RAG 场景。
 
-## 核心能力
+## 亮点
 
-- 上传 PDF、Word、Excel、CSV、Markdown、纯文本等文件。
-- 自动解析、分块、向量化，并保存到本地索引。
-- 支持文档列表、分类管理、重命名、删除。
-- 问答时优先检索本地知识库，置信度不足或问题带时效性时可自动走联网搜索补充证据。
-- 默认使用本地抽取式回答，不依赖外部模型也能完成开发和测试。
-- 前端提供登录、上传、提问、结果、引用来源和错误状态展示。
+- 本地优先：先查自己的知识库，必要时再联网补证据。
+- 文档友好：支持 PDF、Word、Excel、CSV、Markdown、纯文本等常见格式。
+- 可管理：支持文档列表、分类管理、重命名、删除。
+- 可扩展：可替换联网搜索 provider 和 LLM provider。
+- 可测试：核心链路可在无外部 API 的环境下跑单元测试。
+
+## 截图
+
+下面这些位置适合放项目实际截图。你后续把图片放到 `docs/screenshots/` 目录即可，README 会自动引用。
+
+### 登录页
+
+![登录页](docs/screenshots/login.png)
+
+### 知识库管理
+
+![知识库管理](docs/screenshots/knowledge-manage.png)
+
+### 分类管理
+
+![分类管理](docs/screenshots/category-manage.png)
+
+### 问答页
+
+![问答页](docs/screenshots/qa.png)
+
+如果你还没准备截图，也可以先保留这些占位，等界面定稿后再补图。
+
+## 功能清单
+
+- 上传并解析文档，写入本地索引。
+- 自动进行文本分块和向量化。
+- 维护文档列表和分类列表。
+- 问答时展示答案、引用来源、置信度和联网状态。
+- 支持流式问答接口，方便前端边生成边显示。
+- 支持本地账号登录、注册、退出。
 
 ## 技术栈
 
@@ -17,19 +47,20 @@
 - 前端：Vue3 + Vite + TypeScript + Element Plus
 - 存储：本地 JSON 索引文件 + 本地上传目录
 
-## 项目结构
+## 目录结构
 
 ```text
 knowledge_agent/   后端核心逻辑
 frontend/          Vue3 前端
 tests/             单元测试
 examples/          示例文档与评测数据
+docs/screenshots/  README 截图占位目录
 data/              运行时数据目录
 ```
 
-## 本地运行
+## 快速开始
 
-### 1. 后端
+### 1. 启动后端
 
 ```bash
 python3 -m venv .venv
@@ -38,7 +69,7 @@ pip install -r requirements.txt
 uvicorn knowledge_agent.api:app --reload --port 8000
 ```
 
-### 2. 前端
+### 2. 启动前端
 
 ```bash
 cd frontend
@@ -48,14 +79,66 @@ npm run dev
 
 前端开发服务器默认运行在 `http://127.0.0.1:5173`，并通过 Vite 代理把 `/api` 转发到后端 `http://127.0.0.1:8000`。
 
-## 使用流程
+### 3. 开始使用
 
 1. 打开前端页面并登录或注册本地账号。
 2. 在“知识库管理”里上传文档并选择分类。
 3. 在“问答”页面输入问题。
 4. 查看答案、引用来源、置信度和是否走了联网查证。
 
-## 主要接口
+## 部署说明
+
+这个项目没有强绑定某一种部署方式，最稳妥的做法是把前后端分开部署。
+
+### 后端部署
+
+推荐做法是用 `uvicorn` 或 `gunicorn + uvicorn worker` 挂到反向代理后面。
+
+示例：
+
+```bash
+source .venv/bin/activate
+uvicorn knowledge_agent.api:app --host 0.0.0.0 --port 8000
+```
+
+如果你要放到生产环境，建议再加一层 Nginx 或 Caddy：
+
+- 对外提供 HTTPS
+- 将 `/api` 转发到后端服务
+- 将前端静态文件直接由 Web 服务器托管
+
+### 前端部署
+
+前端先构建静态文件：
+
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+构建产物在 `frontend/dist/`。你可以把它交给 Nginx、Caddy、Netlify、Vercel 或任意静态文件服务器托管。
+
+### 单机部署建议
+
+如果你想快速在一台机器上跑起来：
+
+1. 后端监听 `8000`
+2. 前端构建后放到静态服务器
+3. 静态服务器将 `/api` 代理到后端
+4. `data/` 目录挂载到持久化磁盘
+
+### 运行数据
+
+项目运行时会写入这些位置：
+
+- `data/index/store.json`
+- `data/uploads/`
+- `data/auth/users.json`
+
+生产环境里建议把 `data/` 放到独立磁盘卷或持久化目录，避免服务重启后数据丢失。
+
+## 接口说明
 
 ### 认证
 
@@ -84,7 +167,7 @@ npm run dev
 
 - `GET /health`：健康检查和当前 chunk 数量
 
-## 环境变量
+## 配置
 
 `.env.example` 已提供完整样例，常用项如下：
 
