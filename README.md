@@ -10,28 +10,6 @@
 - 可扩展：可替换联网搜索 provider 和 LLM provider。
 - 可测试：核心链路可在无外部 API 的环境下跑单元测试。
 
-## 截图
-
-下面这些位置适合放项目实际截图。你后续把图片放到 `docs/screenshots/` 目录即可，README 会自动引用。
-
-### 登录页
-
-![登录页](docs/screenshots/login.png)
-
-### 知识库管理
-
-![知识库管理](docs/screenshots/knowledge-manage.png)
-
-### 分类管理
-
-![分类管理](docs/screenshots/category-manage.png)
-
-### 问答页
-
-![问答页](docs/screenshots/qa.png)
-
-如果你还没准备截图，也可以先保留这些占位，等界面定稿后再补图。
-
 ## 功能清单
 
 - 上传并解析文档，写入本地索引。
