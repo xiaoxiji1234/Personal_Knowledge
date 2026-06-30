@@ -183,6 +183,23 @@ function saveEditingFolder() {
   if (!editingFolderPath.value) return
   void saveFolderName(editingFolderPath.value)
 }
+
+/**
+ * Map one document filename to a colored file-type tag used by the management table.
+ */
+function documentTypeTag(source: string) {
+  const extension = source.includes('.') ? source.split('.').pop()?.toLowerCase() || '' : ''
+  if (extension === 'pdf') {
+    return { label: 'PDF', type: 'danger' as const }
+  }
+  if (extension === 'docx') {
+    return { label: 'DOCX', type: 'primary' as const }
+  }
+  if (extension === 'xlsx' || extension === 'xls' || extension === 'csv') {
+    return { label: extension.toUpperCase(), type: 'success' as const }
+  }
+  return { label: extension ? extension.toUpperCase() : '文件', type: 'info' as const }
+}
 </script>
 
 <template>
@@ -274,7 +291,7 @@ function saveEditingFolder() {
         <el-table-column label="类型" width="110">
           <template #default="{ row }">
             <el-tag v-if="row.type === 'folder'" effect="light">文件夹</el-tag>
-            <el-tag v-else type="info" effect="light">文件</el-tag>
+            <el-tag v-else :type="documentTypeTag(row.name).type" effect="light">{{ documentTypeTag(row.name).label }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="位置" min-width="160" show-overflow-tooltip>
